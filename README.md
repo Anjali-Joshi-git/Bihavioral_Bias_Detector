@@ -1,3 +1,7 @@
+<a href="https://bihavioralbiasdetector-greefspdfqlxal8b7mrrds.streamlit.app/" target="_blank" style="color: #FF4B4B; text-decoration: none; font-weight: bold;">
+    🚀 Try the Live Dashboard Now
+</a>
+
 # Behavioral Bias Detection in Financial Markets
 
 ## Overview
