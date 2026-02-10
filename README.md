@@ -93,11 +93,17 @@ Models were evaluated using:
 
 ## Project Structure
 ├── data/ # Market data
+
 ├── eda/ # Exploratory analysis
+
 ├── simulation/ # Behavioral simulation logic
+
 ├── features/ # Feature engineering
+
 ├── models/ # Training and evaluation
+
 ├── visualizations/ # Interpretability and performance plots
+
 └── README.md
 
 ---
