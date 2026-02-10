@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 import joblib
 import plotly.express as px
+from pathlib import Path
 
 # -----------------------------
-# Page configuration
+# Page config
 # -----------------------------
 st.set_page_config(
     page_title="Behavioral Bias Detector",
@@ -12,53 +13,70 @@ st.set_page_config(
 )
 
 st.title("📊 Behavioral Bias Detection Dashboard")
-st.caption("Detecting investor irrationalities using Behavioral Finance & ML")
+st.caption("Detecting investor irrationalities using behavioral finance & ML")
+
+# -----------------------------
+# File paths (cloud + local safe)
+# -----------------------------
+BASE_DIR = Path(__file__).parent
+BEHAVIOR_PATH = BASE_DIR / "simulated_investor_behavior.csv"
+MARKET_PATH = BASE_DIR / "market_df.csv"
+MODEL_PATH = BASE_DIR / "Bias_log_model.pkl"
 
 # -----------------------------
 # Load data & model
 # -----------------------------
 @st.cache_data
 def load_data():
-    behavior_df = pd.read_csv("simulated_investor_behavior.csv")
-    market_df = pd.read_csv("market_df.csv")
+    behavior_df = pd.read_csv(BEHAVIOR_PATH)
+    market_df = pd.read_csv(MARKET_PATH)
+
+    # Clean column names (important)
+    behavior_df.columns = behavior_df.columns.str.strip()
+    market_df.columns = market_df.columns.str.strip()
+
     return behavior_df, market_df
 
 @st.cache_resource
 def load_model():
-    return joblib.load("Bias_log_model.pkl")
+    return joblib.load(MODEL_PATH)
 
 behavior_df, market_df = load_data()
 model = load_model()
 
 # -----------------------------
-# IMPORTANT: Feature schema
-# Must match training exactly
+# Detect target / bias column safely
 # -----------------------------
-FEATURE_COLUMNS = [
-    "holding_days",
-    "trade_frequency",
-    "pnl",
-    "avg_return",
-    "volatility",
-    "action_imbalance",
-    "trend_following"
-]
+POSSIBLE_TARGETS = ["true_bias", "bias", "bias_label", "investor_bias", "target"]
+
+TARGET_COL = next(
+    (col for col in POSSIBLE_TARGETS if col in behavior_df.columns),
+    None
+)
+
+if TARGET_COL is None:
+    st.error(
+        "❌ No bias label column found.\n\n"
+        "Expected one of: " + ", ".join(POSSIBLE_TARGETS)
+    )
+    st.write("Available columns:", behavior_df.columns.tolist())
+    st.stop()
 
 # -----------------------------
 # Sidebar
 # -----------------------------
-st.sidebar.header("Controls")
+st.sidebar.header("🎛 Controls")
 
 selected_bias = st.sidebar.multiselect(
-    "Select Investor Bias",
-    options=behavior_df["true_bias"].unique(),
-    default=behavior_df["true_bias"].unique()
+    "Select Bias Type",
+    options=behavior_df[TARGET_COL].unique(),
+    default=behavior_df[TARGET_COL].unique()
 )
 
-filtered_df = behavior_df[behavior_df["true_bias"].isin(selected_bias)]
+filtered_df = behavior_df[behavior_df[TARGET_COL].isin(selected_bias)]
 
 # -----------------------------
-# Market Overview
+# Section 1: Market Overview
 # -----------------------------
 st.subheader("📈 Market Overview")
 
@@ -71,101 +89,93 @@ fig_price = px.line(
 st.plotly_chart(fig_price, use_container_width=True)
 
 # -----------------------------
-# Behavioral Distribution
+# Section 2: Behavioral Distribution
 # -----------------------------
 st.subheader("🧠 Behavioral Bias Distribution")
 
 fig_bias = px.histogram(
     filtered_df,
-    x="true_bias",
-    color="true_bias",
-    title="Distribution of Investor Biases"
+    x=TARGET_COL,
+    color=TARGET_COL,
+    title="Investor Bias Distribution"
 )
 st.plotly_chart(fig_bias, use_container_width=True)
 
 # -----------------------------
-# Holding Duration Analysis
+# Section 3: Holding Behavior
 # -----------------------------
 st.subheader("⏳ Holding Duration by Bias")
 
 fig_hold = px.box(
     filtered_df,
-    x="true_bias",
+    x=TARGET_COL,
     y="holding_days",
-    color="true_bias",
+    color=TARGET_COL,
     title="Holding Duration Patterns"
 )
 st.plotly_chart(fig_hold, use_container_width=True)
 
 # -----------------------------
-# PnL Analysis
+# Section 4: PnL Analysis
 # -----------------------------
-st.subheader("💰 Profit & Loss by Bias")
+st.subheader("💰 Profit & Loss Analysis")
 
 fig_pnl = px.violin(
     filtered_df,
-    x="true_bias",
+    x=TARGET_COL,
     y="pnl",
-    color="true_bias",
+    color=TARGET_COL,
     box=True,
-    title="PnL Distribution Across Biases"
+    title="PnL Distribution by Bias"
 )
 st.plotly_chart(fig_pnl, use_container_width=True)
 
 # -----------------------------
-# Live Bias Prediction
+# Section 5: Live Prediction Demo
 # -----------------------------
-st.subheader("🔮 Live Bias Prediction")
+st.subheader("🔮 Bias Prediction Demo")
 
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    holding_days = st.slider("Holding Days", 0, 30, 5)
+    holding_days = st.slider("Holding Days", 0, 60, 10)
+    volatility = st.slider("Volatility", 0.0, 1.0, 0.25)
 
 with col2:
-    trade_frequency = st.slider("Trade Frequency", 1, 20, 5)
+    trade_frequency = st.slider("Trade Frequency", 1, 30, 5)
+    drawdown = st.slider("Max Drawdown", 0.0, 1.0, 0.2)
 
 with col3:
-    pnl = st.slider("PnL", -0.2, 0.2, 0.01)
+    pnl = st.slider("PnL", -0.5, 0.5, 0.05)
+    win_rate = st.slider("Win Rate", 0.0, 1.0, 0.55)
+    position_size = st.slider("Position Size", 1, 100, 10)
 
 # -----------------------------
-# Build inference input
+# Build input (MUST match training)
 # -----------------------------
+FEATURES = [
+    "holding_days",
+    "trade_frequency",
+    "pnl",
+    "volatility",
+    "drawdown",
+    "win_rate",
+    "position_size"
+]
+
 input_df = pd.DataFrame([{
     "holding_days": holding_days,
     "trade_frequency": trade_frequency,
     "pnl": pnl,
-    "avg_return": 0.0,        # neutral defaults
-    "volatility": 0.0,
-    "action_imbalance": 0.0,
-    "trend_following": 0.0
-}])
+    "volatility": volatility,
+    "drawdown": drawdown,
+    "win_rate": win_rate,
+    "position_size": position_size
+}])[FEATURES]
 
-# Enforce correct feature order
-input_df = input_df[FEATURE_COLUMNS]
-
-if st.button("Predict Investor Bias"):
+# -----------------------------
+# Prediction
+# -----------------------------
+if st.button("Predict Bias"):
     prediction = model.predict(input_df)[0]
-    probabilities = model.predict_proba(input_df)[0]
-
     st.success(f"🧠 Predicted Investor Bias: **{prediction.upper()}**")
-
-    prob_df = pd.DataFrame({
-        "Bias": model.classes_,
-        "Probability": probabilities
-    })
-
-    fig_prob = px.bar(
-        prob_df,
-        x="Bias",
-        y="Probability",
-        title="Prediction Confidence"
-    )
-
-    st.plotly_chart(fig_prob, use_container_width=True)
-
-# -----------------------------
-# Footer
-# -----------------------------
-st.markdown("---")
-st.caption("Built by Anjali Joshi | Behavioral Bias Detection Project")
